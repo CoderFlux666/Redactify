@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+presidio-analyzer
+presidio-anonymizer
+pdf-redactor
+openai-whisper
+ffmpeg-python
+opencv-python-headless
+numpy
+imageio-ffmpeg
+mediapipe

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.env.production
+.DS_Store
+node_modules/
+.next/
+dist/
+build/
+outputs/
+bin/
+*.log
