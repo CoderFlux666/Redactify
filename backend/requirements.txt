@@ -1,6 +1,11 @@
 fastapi
 uvicorn
 python-multipart
+pandas
+presidio-analyzer
+presidio-anonymizer
+faker
+spacy
 presidio-analyzer
 presidio-anonymizer
 pdf-redactor
@@ -10,3 +15,4 @@ opencv-python-headless
 numpy
 imageio-ffmpeg
 mediapipe
+supabase

@@ -37,9 +37,10 @@ export default function VideoRedactionPage() {
                 throw new Error("Invalid response from server");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error processing file:", error);
-            alert("An error occurred while processing the file. Please ensure the backend server is running.");
+            const errorMessage = error.message || "An error occurred while processing the file. Please ensure the backend server is running.";
+            alert(errorMessage);
         } finally {
             setIsProcessing(false);
         }

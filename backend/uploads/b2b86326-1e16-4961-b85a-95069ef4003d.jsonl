@@ -1,0 +1,5 @@
+{"ticket_id": 1001, "category": "Billing", "sentiment": "Negative", "text": "Hi, I am extremely frustrated. My name is Jonathan Doe and you charged my card 4532-1100-8765-9000 twice! My email is jon.doe88@yahoo.com. Fix this now."}
+{"ticket_id": 1002, "category": "Technical Support", "sentiment": "Neutral", "text": "Hello support. I'm having trouble logging in from IP address 192.168.1.45. My account ID is 882910. Can you reset the password for sarah.m@enterprise-inc.com?"}
+{"ticket_id": 1003, "category": "Sales", "sentiment": "Positive", "text": "I love the new feature! I want to upgrade my team. Please call me at (555) 019-2834 to discuss the Enterprise plan. Ask for Michael Scott."}
+{"ticket_id": 1004, "category": "Refund", "sentiment": "Negative", "text": "This is unacceptable. I live at 123 Maple Street, Springfield, IL 62704. I returned the item on 2023-10-12 but haven't received my refund of $599.99."}
+{"ticket_id": 1005, "category": "General Inquiry", "sentiment": "Neutral", "text": "Hi, is the API down? I'm getting 500 errors. Also, please update my contact info to dev-team@startup.io and remove the old number 555-998-1122."}

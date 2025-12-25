@@ -28,6 +28,29 @@ class AudioRedactionService:
             content = await file.read()
             f.write(content)
 
+        # Transcribe and find sensitive intervals
+        mute_intervals = self._analyze_audio_file(input_path)
+
+        # Apply redaction (bleeping)
+        if mute_intervals:
+            self._bleep_audio(input_path, output_path, mute_intervals)
+        else:
+            # If no redaction needed, just copy
+            import shutil
+            shutil.copy(input_path, output_path)
+
+        return {
+            "status": "success",
+            "original_filename": filename,
+            "redacted_filename": output_filename,
+            "redacted_file_path": output_path,
+            "method": "Audio Redaction (Whisper + Presidio + Bleep)"
+        }
+
+    def _analyze_audio_file(self, input_path):
+        if self.model is None:
+            self.model = whisper.load_model("base")
+            
         # Transcribe with word timestamps
         result = self.model.transcribe(input_path, word_timestamps=True)
         segments = result["segments"]
@@ -48,7 +71,7 @@ class AudioRedactionService:
                 language="en", 
                 entities=[
                     "PERSON", "PHONE_NUMBER", "CREDIT_CARD", "EMAIL_ADDRESS", 
-                    "US_SSN", "US_PASSPORT", "IBAN_CODE", "DATE_TIME", "NRP"
+                    "US_SSN", "US_PASSPORT", "IBAN_CODE", "DATE_TIME", "NRP", "LOCATION"
                 ]
             )
             
@@ -88,22 +111,8 @@ class AudioRedactionService:
                     if entity_t_start is not None and entity_t_end is not None:
                         print(f"  Redacting entity '{text_from_words[e_start:e_end]}' at {entity_t_start}-{entity_t_end}")
                         mute_intervals.append((entity_t_start, entity_t_end))
-
-        # Apply redaction (bleeping)
-        if mute_intervals:
-            self._bleep_audio(input_path, output_path, mute_intervals)
-        else:
-            # If no redaction needed, just copy
-            import shutil
-            shutil.copy(input_path, output_path)
-
-        return {
-            "status": "success",
-            "original_filename": filename,
-            "redacted_filename": output_filename,
-            "redacted_file_path": output_path,
-            "method": "Audio Redaction (Whisper + Presidio + Bleep)"
-        }
+        
+        return mute_intervals
 
     def _bleep_audio(self, input_path, output_path, intervals):
         # 1. Mute the original audio during sensitive intervals

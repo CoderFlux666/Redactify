@@ -1,11 +1,12 @@
 "use client";
 
-import { Home, FileText, Settings, Shield, Menu, Mic, Video, Bell } from "lucide-react";
+import { Home, FileText, Settings, Shield, Menu, Mic, Video, Bell, Bot, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+
 
 const menuItems = [
     { icon: Home, label: "Dashboard", href: "/dashboard" },
@@ -13,30 +14,35 @@ const menuItems = [
     { icon: Shield, label: "Redaction Rules", href: "/dashboard/rules" },
     { icon: Mic, label: "Audio Redaction", href: "/dashboard/audio" },
     { icon: Video, label: "Video Redaction", href: "/dashboard/video" },
-    { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
 export function AppSidebar() {
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const { user } = useUser();
     const pathname = usePathname();
 
     return (
         <motion.div
             animate={{ width: isCollapsed ? 80 : 280 }}
-            className="h-screen sticky top-0 left-0 glass-panel border-r border-slate-200/50 z-50 flex flex-col"
+            className="h-screen bg-white border-r border-slate-200 flex flex-col sticky top-0 z-50"
         >
-            <div className="p-6 flex items-center justify-between">
+            <div className="p-4 flex items-center justify-between">
                 <AnimatePresence>
                     {!isCollapsed && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 overflow-hidden whitespace-nowrap"
                         >
-                            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold">R</div>
-                            <span className="font-bold text-xl tracking-tight">Redactify</span>
+                            <div className="relative w-8 h-8">
+                                <Image
+                                    src="/logo-v0-pixel.png"
+                                    alt="V0 Logo"
+                                    fill
+                                    className="object-contain rounded-lg shadow-sm"
+                                />
+                            </div>
+                            <span className="font-bold text-xl tracking-tight font-outfit">Redactify</span>
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -48,7 +54,7 @@ export function AppSidebar() {
                 </button>
             </div>
 
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                 {menuItems.map((item) => {
                     const isActive = pathname === item.href;
                     return (
@@ -60,7 +66,7 @@ export function AppSidebar() {
                                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                                     }`}
                             >
-                                <item.icon className="w-5 h-5" />
+                                <item.icon className="w-5 h-5 shrink-0" />
                                 {!isCollapsed && <span>{item.label}</span>}
                             </motion.div>
                         </Link>
@@ -68,7 +74,40 @@ export function AppSidebar() {
                 })}
             </nav>
 
-            <div className="p-4">
+            <div className="p-4 mt-auto border-t border-slate-100">
+                {!isCollapsed && (
+                    <div className="mb-4">
+                        <div className="flex items-center gap-2 px-2 mb-2">
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Enterprise</span>
+                            <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-200 opacity-70 shadow-[0_0_10px_rgba(79,70,229,0.5)] animate-pulse">Free Book</span>
+                        </div>
+                        <Link href="/dashboard/llm-cleaner">
+                            <motion.div
+                                whileHover={{ x: 4 }}
+                                className={`flex items-center gap-3 p-3 rounded-xl transition-all ${pathname === "/dashboard/llm-cleaner"
+                                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20"
+                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                    }`}
+                            >
+                                <Bot className="w-5 h-5 shrink-0" />
+                                <span>LLM Dataset Cleaning</span>
+                            </motion.div>
+                        </Link>
+                        <Link href="/dashboard/reversible-redaction">
+                            <motion.div
+                                whileHover={{ x: 4 }}
+                                className={`flex items-center gap-3 p-3 rounded-xl transition-all ${pathname === "/dashboard/reversible-redaction"
+                                    ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20"
+                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                    }`}
+                            >
+                                <RefreshCcw className="w-5 h-5 shrink-0" />
+                                <span>Reversible Redaction</span>
+                            </motion.div>
+                        </Link>
+                    </div>
+                )}
+
                 {!isCollapsed && (
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <p className="text-xs font-medium text-slate-500 mb-2">Storage Used</p>

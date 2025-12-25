@@ -1,11 +1,15 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from services.redaction import RedactionService
 from services.audio_redaction import AudioRedactionService
 from services.video_redaction import VideoRedactionService
+from services.video_redaction import VideoRedactionService
+from services.llm_cleaner import process_dataset
 import os
 import imageio_ffmpeg
+import uuid
+import shutil
 
 import database
 
@@ -117,3 +121,33 @@ async def redact_video(file: UploadFile = File(...)):
         return result
     
     return result
+
+@app.post("/clean-dataset")
+async def clean_dataset(file: UploadFile = File(...), text_column: str = "message", user_id: str = Form(...)):
+    # Save uploaded file
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    os.makedirs("uploads", exist_ok=True)
+    input_path = os.path.join("uploads", unique_filename)
+    output_filename = f"cleaned_{unique_filename}"
+    output_path = os.path.join("outputs", output_filename)
+    
+    with open(input_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    try:
+        # Process dataset
+        process_dataset(input_path, output_path, text_column, user_id)
+        
+        # Return URL
+        base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+        url = f"{base_url}/outputs/{output_filename}"
+        
+        return {
+            "status": "success",
+            "original_filename": file.filename,
+            "cleaned_filename": output_filename,
+            "url": url
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

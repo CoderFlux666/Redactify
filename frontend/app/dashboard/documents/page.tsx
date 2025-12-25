@@ -15,6 +15,8 @@ interface Document {
     file_path?: string;
 }
 
+
+
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export default function DocumentsPage() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/documents`);
             const data = await response.json();
-            setDocuments(data.documents);
+            setDocuments(data.documents || []);
         } catch (error) {
             console.error("Failed to fetch documents:", error);
         } finally {
