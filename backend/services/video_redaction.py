@@ -98,10 +98,10 @@ class VideoRedactionService:
                         pass
 
     def _redact_faces(self, input_path, output_path):
-        # Initialize DNN model lazily
-        self.net = None
-        self.face_cascade = None
-
+        """
+        Improved face detection with frame-by-frame processing and precise redaction.
+        Uses Haar Cascade for reliability and black rectangles for redaction.
+        """
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
             raise ValueError("Could not open video file")
@@ -113,71 +113,114 @@ class VideoRedactionService:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
+        # Initialize face detection model (Haar Cascade - more reliable)
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
         frame_count = 0
+        print("DEBUG: Starting frame-by-frame face detection...", flush=True)
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
             
             frame_count += 1
-            if frame_count % 100 == 0:
-                print(f"DEBUG: Processing frame {frame_count}", flush=True)
+            if frame_count % 50 == 0:
+                print(f"DEBUG: Processed {frame_count} frames", flush=True)
 
-            # OpenCV DNN Face Detection
-            if not hasattr(self, 'last_detections'):
-                self.last_detections = []
-
-            # Run detection every 3 frames
-            if frame_count % 3 == 0:
-                if not hasattr(self, 'net') or self.net is None:
-                    prototxt = "deploy.prototxt"
-                    model = "res10_300x300_ssd_iter_140000.caffemodel"
-                    if not os.path.exists(prototxt) or not os.path.exists(model):
-                         # Fallback to Haar
-                         if self.face_cascade is None:
-                            self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-                         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                         faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
-                         self.last_detections = []
-                         for (x, y, w, h) in faces:
-                             self.last_detections.append({'x': x, 'y': y, 'w': w, 'h': h})
-                    else:
-                        self.net = cv2.dnn.readNetFromCaffe(prototxt, model)
-                
-                if hasattr(self, 'net') and self.net is not None:
-                    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-                    self.net.setInput(blob)
-                    dnn_detections = self.net.forward()
-                    
-                    self.last_detections = []
-                    for i in range(0, dnn_detections.shape[2]):
-                        confidence = dnn_detections[0, 0, i, 2]
-                        if confidence > 0.3:
-                            box = dnn_detections[0, 0, i, 3:7] * np.array([width, height, width, height])
-                            (startX, startY, endX, endY) = box.astype("int")
-                            w = endX - startX
-                            h = endY - startY
-                            self.last_detections.append({'x': startX, 'y': startY, 'w': w, 'h': h})
+            # Convert to grayscale for face detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             
-            detections = self.last_detections
+            # Detect faces in EVERY frame (not every 3rd)
+            # Parameters: scaleFactor=1.1, minNeighbors=5 for better precision
+            faces = face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(30, 30),
+                flags=cv2.CASCADE_SCALE_IMAGE
+            )
             
-            for det in detections:
-                x, y, w, h = det['x'], det['y'], det['w'], det['h']
-                # Add padding
-                pad_w = int(w * 0.1)
-                pad_h = int(h * 0.15)
-                x = max(0, x - pad_w)
-                y = max(0, y - pad_h)
-                w = min(width - x, w + 2*pad_w)
-                h = min(height - y, h + 2*pad_h)
+            # Remove duplicate/overlapping detections using Non-Maximum Suppression
+            if len(faces) > 0:
+                faces = self._remove_overlapping_boxes(faces)
+            
+            # Redact each detected face with BLACK RECTANGLE
+            for (x, y, w, h) in faces:
+                # Add padding for better coverage (20% on each side)
+                pad_w = int(w * 0.2)
+                pad_h = int(h * 0.25)
                 
-                # Redact with black rectangle
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 0), -1)
+                # Calculate padded coordinates
+                x1 = max(0, x - pad_w)
+                y1 = max(0, y - pad_h)
+                x2 = min(width, x + w + pad_w)
+                y2 = min(height, y + h + pad_h)
+                
+                # Draw solid black rectangle for redaction
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
             
             out.write(frame)
 
         cap.release()
         out.release()
+        print(f"DEBUG: Face redaction complete. Processed {frame_count} frames", flush=True)
+    
+    def _remove_overlapping_boxes(self, boxes):
+        """
+        Remove duplicate/overlapping face detections using Non-Maximum Suppression.
+        This prevents multiple boxes on the same face.
+        """
+        if len(boxes) == 0:
+            return []
+        
+        # Convert to (x1, y1, x2, y2) format
+        boxes_xyxy = []
+        for (x, y, w, h) in boxes:
+            boxes_xyxy.append([x, y, x + w, y + h])
+        
+        boxes_xyxy = np.array(boxes_xyxy)
+        
+        # Get coordinates
+        x1 = boxes_xyxy[:, 0]
+        y1 = boxes_xyxy[:, 1]
+        x2 = boxes_xyxy[:, 2]
+        y2 = boxes_xyxy[:, 3]
+        
+        # Calculate areas
+        areas = (x2 - x1) * (y2 - y1)
+        
+        # Sort by bottom-right y coordinate
+        indices = np.argsort(y2)
+        
+        keep = []
+        while len(indices) > 0:
+            # Pick the last box
+            last = len(indices) - 1
+            i = indices[last]
+            keep.append(i)
+            
+            # Find overlapping boxes
+            xx1 = np.maximum(x1[i], x1[indices[:last]])
+            yy1 = np.maximum(y1[i], y1[indices[:last]])
+            xx2 = np.minimum(x2[i], x2[indices[:last]])
+            yy2 = np.minimum(y2[i], y2[indices[:last]])
+            
+            # Calculate overlap
+            w = np.maximum(0, xx2 - xx1)
+            h = np.maximum(0, yy2 - yy1)
+            overlap = (w * h) / areas[indices[:last]]
+            
+            # Remove overlapping boxes (threshold 0.3 = 30% overlap)
+            indices = np.delete(indices, np.concatenate(([last], np.where(overlap > 0.3)[0])))
+        
+        # Return non-overlapping boxes in original format
+        result = []
+        for i in keep:
+            x, y, w, h = boxes[i]
+            result.append((x, y, w, h))
+        
+        return result
 
     def _extract_audio(self, input_path, output_path):
         import subprocess
