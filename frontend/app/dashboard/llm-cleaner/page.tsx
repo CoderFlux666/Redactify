@@ -1,20 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { FileUpload } from "@/components/dashboard/FileUpload";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { Download, CheckCircle, AlertCircle, RefreshCw, Zap } from "lucide-react";
 import { WorkflowBuilder } from "@/components/WorkflowBuilder";
 import { TerminalLog } from "@/components/TerminalLog";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
+import { ProcessingState } from "@/components/dashboard/ProcessingState";
+import { GlassCard } from "@/components/ui/GlassCard";
 
 export default function LLMCleanerPage() {
     const [user, setUser] = useState<any>(null);
     const [file, setFile] = useState<File | null>(null);
+    const supabase = createClient();
     const [isUploading, setIsUploading] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [progress, setProgress] = useState(0);
+    const [status, setStatus] = useState("Initializing pipeline...");
+    const progressInterval = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const getUser = async () => {
@@ -22,13 +28,51 @@ export default function LLMCleanerPage() {
             setUser(user);
         };
         getUser();
+
+        return () => {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+        };
     }, []);
+
+    const startProgressSimulation = () => {
+        setProgress(0);
+        setStatus("Initializing pipeline...");
+
+        if (progressInterval.current) clearInterval(progressInterval.current);
+
+        progressInterval.current = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 92) {
+                    setStatus("Finalizing dataset...");
+                    return 92;
+                }
+
+                // Slower progress for "massive" datasets feel
+                let increment = 0.8;
+                if (prev < 20) increment = 2.0;
+                else if (prev < 50) increment = 1.0;
+                else if (prev < 80) increment = 0.5;
+                else increment = 0.2;
+
+                const next = prev + increment;
+
+                if (next > 15 && next < 35) setStatus("Parsing dataset structure...");
+                if (next >= 35 && next < 60) setStatus("Sanitizing PII entities...");
+                if (next >= 60 && next < 85) setStatus("Validating schema integrity...");
+                if (next >= 85) setStatus("Optimizing for LLM training...");
+
+                return next;
+            });
+        }, 100);
+    };
 
     const handleUpload = async () => {
         if (!file || !user) return;
 
         setIsUploading(true);
         setError(null);
+        setResult(null);
+        startProgressSimulation();
 
         const formData = new FormData();
         formData.append("file", file);
@@ -44,15 +88,24 @@ export default function LLMCleanerPage() {
             const data = await response.json();
 
             if (data.status === "success") {
+                // Complete progress
+                if (progressInterval.current) clearInterval(progressInterval.current);
+                setProgress(100);
+                setStatus("Pipeline Complete!");
+
+                await new Promise(resolve => setTimeout(resolve, 600));
                 setResult(data);
             } else {
                 setError(data.message || "An error occurred during processing.");
+                setIsUploading(false); // Stop processing on error
             }
         } catch (err) {
             setError("Failed to connect to the server.");
             console.error(err);
-        } finally {
             setIsUploading(false);
+        } finally {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+            if (!result) setIsUploading(false); // Only reset if we didn't succeed (success shows result view)
         }
     };
 
@@ -72,33 +125,41 @@ export default function LLMCleanerPage() {
 
                 {!result ? (
                     <div className="flex flex-col items-center gap-8">
-                        <FileUpload
-                            onFileSelect={(f) => {
-                                setFile(f);
-                                setResult(null);
-                                setError(null);
-                            }}
-                            isProcessing={isUploading}
-                            accept=".csv,.jsonl"
-                            supportText="Supports CSV, JSONL (Massive files supported)"
-                        />
+                        {isUploading ? (
+                            <GlassCard className="w-full max-w-2xl p-12">
+                                <ProcessingState progress={progress} status={status} />
+                            </GlassCard>
+                        ) : (
+                            <>
+                                <FileUpload
+                                    onFileSelect={(f) => {
+                                        setFile(f);
+                                        setResult(null);
+                                        setError(null);
+                                    }}
+                                    isProcessing={isUploading}
+                                    accept=".csv,.jsonl"
+                                    supportText="Supports CSV, JSONL (Massive files supported)"
+                                />
 
-                        {file && (
-                            <PremiumButton
-                                onClick={handleUpload}
-                                disabled={isUploading}
-                                className="w-full max-w-xs text-lg py-4"
-                                icon={isUploading ? <RefreshCw className="animate-spin" /> : <Zap />}
-                            >
-                                {isUploading ? "Processing Pipeline..." : "Start Cleaning Pipeline"}
-                            </PremiumButton>
-                        )}
+                                {file && (
+                                    <PremiumButton
+                                        onClick={handleUpload}
+                                        disabled={isUploading}
+                                        className="w-full max-w-xs text-lg py-4"
+                                        icon={isUploading ? <RefreshCw className="animate-spin" /> : <Zap />}
+                                    >
+                                        Start Cleaning Pipeline
+                                    </PremiumButton>
+                                )}
 
-                        {error && (
-                            <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-center gap-3 border border-red-100 max-w-md">
-                                <AlertCircle className="w-5 h-5" />
-                                {error}
-                            </div>
+                                {error && (
+                                    <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-center gap-3 border border-red-100 max-w-md">
+                                        <AlertCircle className="w-5 h-5" />
+                                        {error}
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 ) : (
@@ -130,6 +191,8 @@ export default function LLMCleanerPage() {
                                 onClick={() => {
                                     setFile(null);
                                     setResult(null);
+                                    setIsUploading(false);
+                                    setProgress(0);
                                 }}
                                 className="px-6 py-3 rounded-xl font-medium text-slate-600 hover:bg-slate-50 transition-colors border border-slate-200"
                             >

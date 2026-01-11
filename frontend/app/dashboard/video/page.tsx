@@ -1,25 +1,96 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FileUpload } from "@/components/dashboard/FileUpload";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { Sparkles, Download } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { ProcessingState } from "@/components/dashboard/ProcessingState";
+import { createClient } from "@/utils/supabase/client";
 
 export default function VideoRedactionPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [resultUrl, setResultUrl] = useState<string | null>(null);
+    const [progress, setProgress] = useState(0);
+    const [status, setStatus] = useState("Initializing...");
+    const progressInterval = useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+        };
+    }, []);
+
+    const startProgressSimulation = () => {
+        setProgress(0);
+        setStatus("Fetching document details...");
+
+        if (progressInterval.current) clearInterval(progressInterval.current);
+
+        progressInterval.current = setInterval(() => {
+            setProgress(prev => {
+                // Stall at 92% until actual completion
+                if (prev >= 92) {
+                    setStatus("Finalizing redaction...");
+                    return 92;
+                }
+
+                // Dynamic speed: Fast start, slow middle, very slow end
+                let increment = 0.5;
+                if (prev < 20) increment = 2.5;
+                else if (prev < 50) increment = 1.0;
+                else if (prev < 80) increment = 0.4;
+                else increment = 0.1;
+
+                const next = prev + increment;
+
+                // Update status text based on progress stages
+                if (next > 15 && next < 35) setStatus("Analyzing video frames...");
+                if (next >= 35 && next < 60) setStatus("Detecting faces...");
+                if (next >= 60 && next < 85) setStatus("Redacting sensitive information...");
+                if (next >= 85) setStatus("Applying smooth filters...");
+
+                return next;
+            });
+        }, 100);
+    };
+
+    const [user, setUser] = useState<any>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+        };
+        getUser();
+    }, []);
 
     const handleProcess = async () => {
         if (!file) return;
 
         setIsProcessing(true);
         setResultUrl(null);
+        startProgressSimulation();
 
         try {
             const formData = new FormData();
             formData.append("file", file);
+
+            let currentUserId = user?.id;
+            if (!currentUserId) {
+                const { data: { user: freshUser } } = await supabase.auth.getUser();
+                currentUserId = freshUser?.id;
+            }
+
+            if (currentUserId) {
+                formData.append("user_id", currentUserId);
+            } else {
+                console.warn("User ID not found, uploading as anonymous (history will not be saved)");
+                formData.append("user_id", "anonymous");
+            }
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/redact/video`, {
                 method: "POST",
@@ -31,6 +102,15 @@ export default function VideoRedactionPage() {
             }
 
             const data = await response.json();
+
+            // Complete the progress bar
+            if (progressInterval.current) clearInterval(progressInterval.current);
+            setProgress(100);
+            setStatus("Complete!");
+
+            // Small delay to show 100% before showing result
+            await new Promise(resolve => setTimeout(resolve, 600));
+
             if (data.status === "success" && data.url) {
                 setResultUrl(data.url);
             } else {
@@ -41,8 +121,12 @@ export default function VideoRedactionPage() {
             console.error("Error processing file:", error);
             const errorMessage = error.message || "An error occurred while processing the file. Please ensure the backend server is running.";
             alert(errorMessage);
+            setIsProcessing(false); // Only reset if error, otherwise we show result
         } finally {
-            setIsProcessing(false);
+            if (progressInterval.current) clearInterval(progressInterval.current);
+            // We don't set isProcessing(false) here immediately if successful 
+            // because we switch to the result view which is handled by !resultUrl check
+            if (!resultUrl) setIsProcessing(false);
         }
     };
 
@@ -59,22 +143,30 @@ export default function VideoRedactionPage() {
 
             {!resultUrl ? (
                 <div className="flex flex-col items-center gap-8">
-                    <FileUpload
-                        onFileSelect={setFile}
-                        isProcessing={isProcessing}
-                        accept=".mp4,.mov,.avi"
-                        supportText="Supports MP4, MOV, AVI (Max 100MB)"
-                    />
+                    {isProcessing ? (
+                        <GlassCard className="w-full max-w-2xl p-12">
+                            <ProcessingState progress={progress} status={status} />
+                        </GlassCard>
+                    ) : (
+                        <>
+                            <FileUpload
+                                onFileSelect={setFile}
+                                isProcessing={isProcessing}
+                                accept=".mp4,.mov,.avi"
+                                supportText="Supports MP4, MOV, AVI (Max 100MB)"
+                            />
 
-                    {file && (
-                        <PremiumButton
-                            onClick={handleProcess}
-                            disabled={isProcessing}
-                            className="w-full max-w-xs text-lg py-4"
-                            icon={<Sparkles />}
-                        >
-                            {isProcessing ? "Processing Video..." : "Redact Video"}
-                        </PremiumButton>
+                            {file && (
+                                <PremiumButton
+                                    onClick={handleProcess}
+                                    disabled={isProcessing}
+                                    className="w-full max-w-xs text-lg py-4"
+                                    icon={<Sparkles />}
+                                >
+                                    Redact Video
+                                </PremiumButton>
+                            )}
+                        </>
                     )}
                 </div>
             ) : (
@@ -113,6 +205,8 @@ export default function VideoRedactionPage() {
                                 onClick={() => {
                                     setFile(null);
                                     setResultUrl(null);
+                                    setIsProcessing(false);
+                                    setProgress(0);
                                 }}
                             >
                                 Process Another

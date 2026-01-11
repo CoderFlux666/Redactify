@@ -143,20 +143,46 @@ export function Navbar() {
                         </Link>
                     </>
                 ) : (
-                    <>
+                    <div className="flex items-center gap-4">
                         <Link href="/dashboard">
-                            <button className="text-sm font-medium text-slate-600 hover:text-slate-900 mr-2 flex items-center gap-2">
-                                <LayoutDashboard className="w-4 h-4" />
-                                Dashboard
-                            </button>
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white transition-all shadow-lg shadow-slate-900/20"
+                            >
+                                <span className="font-medium text-sm">Dashboard</span>
+                            </motion.button>
                         </Link>
-                        <button
-                            onClick={handleSignOut}
-                            className="text-sm font-medium text-red-600 hover:text-red-700 flex items-center gap-2"
-                        >
-                            <LogOut className="w-4 h-4" />
-                        </button>
-                    </>
+
+                        <div className="relative group/profile">
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-md border-2 border-white ring-1 ring-slate-100 overflow-hidden"
+                            >
+                                {user?.user_metadata?.avatar_url ? (
+                                    <img
+                                        src={user.user_metadata.avatar_url}
+                                        alt="Profile"
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    user?.email?.[0].toUpperCase() || "U"
+                                )}
+                            </motion.button>
+
+                            {/* Simple Dropdown for Sign Out */}
+                            <div className="absolute right-0 top-full mt-2 w-32 py-1 bg-white rounded-xl shadow-xl border border-slate-100 opacity-0 invisible group-hover/profile:opacity-100 group-hover/profile:visible transition-all transform origin-top-right z-50">
+                                <button
+                                    onClick={handleSignOut}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                >
+                                    <LogOut className="w-3 h-3" />
+                                    Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </motion.nav>

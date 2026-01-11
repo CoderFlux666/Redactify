@@ -1,25 +1,100 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FileUpload } from "@/components/dashboard/FileUpload";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { Sparkles, Download } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { ProcessingState } from "@/components/dashboard/ProcessingState";
+import { CustomAudioPlayer } from "@/components/dashboard/CustomAudioPlayer";
+import { createClient } from "@/utils/supabase/client";
 
 export default function AudioRedactionPage() {
     const [file, setFile] = useState<File | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [resultUrl, setResultUrl] = useState<string | null>(null);
+    const [progress, setProgress] = useState(0);
+    const [status, setStatus] = useState("Initializing...");
+    const progressInterval = useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup interval on unmount
+    useEffect(() => {
+        return () => {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+        };
+    }, []);
+
+    const startProgressSimulation = () => {
+        setProgress(0);
+        setStatus("Fetching audio details...");
+
+        if (progressInterval.current) clearInterval(progressInterval.current);
+
+        progressInterval.current = setInterval(() => {
+            setProgress(prev => {
+                // Stall at 92% until actual completion
+                if (prev >= 92) {
+                    setStatus("Finalizing audio processing...");
+                    return 92;
+                }
+
+                // Dynamic speed
+                let increment = 0.8; // Slightly faster than video
+                if (prev < 20) increment = 3.0;
+                else if (prev < 50) increment = 1.5;
+                else if (prev < 80) increment = 0.6;
+                else increment = 0.2;
+
+                const next = prev + increment;
+
+                // Update status text based on progress stages
+                if (next > 15 && next < 35) setStatus("Analyzing audio waveform...");
+                if (next >= 35 && next < 60) setStatus("Detecting sensitive speech...");
+                if (next >= 60 && next < 85) setStatus("Muting identified segments...");
+                if (next >= 85) setStatus("Reassembling audio track...");
+
+                return next;
+            });
+        }, 100);
+    };
+
+    const [user, setUser] = useState<any>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+        };
+        getUser();
+    }, []);
 
     const handleProcess = async () => {
         if (!file) return;
 
         setIsProcessing(true);
         setResultUrl(null);
+        startProgressSimulation();
 
         try {
             const formData = new FormData();
             formData.append("file", file);
+
+            let currentUserId = user?.id;
+            if (!currentUserId) {
+                const { data: { user: freshUser } } = await supabase.auth.getUser();
+                currentUserId = freshUser?.id;
+            }
+
+            if (currentUserId) {
+                formData.append("user_id", currentUserId);
+            } else {
+                console.warn("User ID not found, uploading as anonymous (history will not be saved)");
+                // Still send a value to satisfy backend Form(...) requirement if it's strict, 
+                // or let it fail if backend requires it. 
+                // Based on main.py: user_id: str = Form(...) -> it IS required.
+                formData.append("user_id", "anonymous");
+            }
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/redact/audio`, {
                 method: "POST",
@@ -30,19 +105,30 @@ export default function AudioRedactionPage() {
                 throw new Error("Failed to process file");
             }
 
-            // For audio/video, we expect a file download or a URL to the processed file
             const data = await response.json();
+
+            // Complete the progress bar
+            if (progressInterval.current) clearInterval(progressInterval.current);
+            setProgress(100);
+            setStatus("Complete!");
+
+            // Small delay to show 100% before showing result
+            await new Promise(resolve => setTimeout(resolve, 600));
+
             if (data.status === "success" && data.url) {
                 setResultUrl(data.url);
             } else {
                 throw new Error("Invalid response from server");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error processing file:", error);
-            alert("An error occurred while processing the file. Please ensure the backend server is running.");
-        } finally {
+            const errorMessage = error.message || "An error occurred while processing the file. Please ensure the backend server is running.";
+            alert(errorMessage);
             setIsProcessing(false);
+        } finally {
+            if (progressInterval.current) clearInterval(progressInterval.current);
+            if (!resultUrl) setIsProcessing(false);
         }
     };
 
@@ -59,66 +145,52 @@ export default function AudioRedactionPage() {
 
             {!resultUrl ? (
                 <div className="flex flex-col items-center gap-8">
-                    <FileUpload
-                        onFileSelect={setFile}
-                        isProcessing={isProcessing}
-                        accept=".mp3,.wav,.m4a"
-                        supportText="Supports MP3, WAV, M4A (Max 50MB)"
-                    />
+                    {isProcessing ? (
+                        <GlassCard className="w-full max-w-2xl p-12">
+                            <ProcessingState progress={progress} status={status} />
+                        </GlassCard>
+                    ) : (
+                        <>
+                            <FileUpload
+                                onFileSelect={setFile}
+                                isProcessing={isProcessing}
+                                accept=".mp3,.wav,.m4a"
+                                supportText="Supports MP3, WAV, M4A (Max 50MB)"
+                            />
 
-                    {file && (
-                        <PremiumButton
-                            onClick={handleProcess}
-                            disabled={isProcessing}
-                            className="w-full max-w-xs text-lg py-4"
-                            icon={<Sparkles />}
-                        >
-                            {isProcessing ? "Processing Audio..." : "Redact Audio"}
-                        </PremiumButton>
+                            {file && (
+                                <PremiumButton
+                                    onClick={handleProcess}
+                                    disabled={isProcessing}
+                                    className="w-full max-w-xs text-lg py-4"
+                                    icon={<Sparkles />}
+                                >
+                                    Redact Audio
+                                </PremiumButton>
+                            )}
+                        </>
                     )}
                 </div>
             ) : (
-                <div className="flex flex-col items-center gap-8">
-                    <GlassCard className="p-8 text-center space-y-6">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                            <Sparkles className="w-8 h-8 text-green-600" />
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-bold text-slate-900">Redaction Complete!</h3>
-                            <p className="text-slate-500 mt-2">Your audio file has been processed and sensitive information muted.</p>
-                        </div>
-
-                        <audio controls className="w-full max-w-md mx-auto">
-                            <source src={resultUrl} type={file?.type || "audio/mpeg"} />
-                            Your browser does not support the audio element.
-                        </audio>
-
-                        <div className="flex gap-4 justify-center">
-                            <PremiumButton
-                                onClick={() => {
-                                    const a = document.createElement('a');
-                                    a.href = resultUrl;
-                                    a.download = `redacted_${file?.name}`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    document.body.removeChild(a);
-                                }}
-                                icon={<Download />}
-                            >
-                                Download Redacted Audio
-                            </PremiumButton>
-
-                            <PremiumButton
-                                variant="secondary"
-                                onClick={() => {
-                                    setFile(null);
-                                    setResultUrl(null);
-                                }}
-                            >
-                                Process Another
-                            </PremiumButton>
-                        </div>
-                    </GlassCard>
+                <div className="flex flex-col items-center gap-8 w-full">
+                    <CustomAudioPlayer
+                        src={resultUrl}
+                        fileName={file?.name}
+                        onDownload={() => {
+                            const a = document.createElement('a');
+                            a.href = resultUrl;
+                            a.download = `redacted_${file?.name}`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }}
+                        onProcessAnother={() => {
+                            setFile(null);
+                            setResultUrl(null);
+                            setIsProcessing(false);
+                            setProgress(0);
+                        }}
+                    />
                 </div>
             )}
         </div>

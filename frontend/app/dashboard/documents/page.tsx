@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { FileText, Calendar, Download, Eye, Mic, Video } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { createClient } from "@/utils/supabase/client";
 
 interface Document {
     id: number;
@@ -20,14 +21,25 @@ interface Document {
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<any>(null);
+    const supabase = createClient();
 
     useEffect(() => {
-        fetchDocuments();
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+            if (user) {
+                fetchDocuments(user.id);
+            } else {
+                setLoading(false);
+            }
+        };
+        getUser();
     }, []);
 
-    const fetchDocuments = async () => {
+    const fetchDocuments = async (userId: string) => {
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/documents`);
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/documents?user_id=${userId}`);
             const data = await response.json();
             setDocuments(data.documents || []);
         } catch (error) {

@@ -36,12 +36,15 @@ export default function ProfilePage() {
             } else {
                 setUser(user);
 
-                // Fetch redaction count for the user
-                const { count } = await supabase
-                    .from('documents')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('user_id', user.id);
-                setRedactionCount(count || 0);
+                // Fetch redaction count for the user from backend API
+                try {
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/documents?user_id=${user.id}`);
+                    const data = await response.json();
+                    setRedactionCount(data.documents?.length || 0);
+                } catch (error) {
+                    console.error("Failed to fetch redaction count:", error);
+                    setRedactionCount(0);
+                }
             }
         };
         getUser();
