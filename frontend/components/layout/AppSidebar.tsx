@@ -16,15 +16,17 @@ const menuItems = [
     { icon: Video, label: "Video Redaction", href: "/dashboard/video" },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+    isMobileMenuOpen?: boolean;
+    onClose?: () => void;
+}
+
+export function AppSidebar({ isMobileMenuOpen, onClose }: AppSidebarProps) {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const pathname = usePathname();
 
-    return (
-        <motion.div
-            animate={{ width: isCollapsed ? 80 : 280 }}
-            className="h-screen bg-white border-r border-slate-200 flex flex-col sticky top-0 z-50"
-        >
+    const SidebarContent = () => (
+        <>
             <div className="p-4 flex items-center justify-between">
                 <AnimatePresence>
                     {!isCollapsed && (
@@ -48,7 +50,14 @@ export function AppSidebar() {
                 </AnimatePresence>
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors hidden md:block"
+                >
+                    <Menu className="w-5 h-5 text-slate-500" />
+                </button>
+                {/* Mobile Close Button */}
+                <button
+                    onClick={onClose}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors md:hidden"
                 >
                     <Menu className="w-5 h-5 text-slate-500" />
                 </button>
@@ -58,7 +67,7 @@ export function AppSidebar() {
                 {menuItems.map((item) => {
                     const isActive = pathname === item.href;
                     return (
-                        <Link key={item.href} href={item.href}>
+                        <Link key={item.href} href={item.href} onClick={onClose}>
                             <motion.div
                                 whileHover={{ x: 4 }}
                                 className={`flex items-center gap-3 p-3 rounded-xl transition-all ${isActive
@@ -67,7 +76,7 @@ export function AppSidebar() {
                                     }`}
                             >
                                 <item.icon className="w-5 h-5 shrink-0" />
-                                {!isCollapsed && <span>{item.label}</span>}
+                                {(!isCollapsed || isMobileMenuOpen) && <span>{item.label}</span>}
                             </motion.div>
                         </Link>
                     );
@@ -75,13 +84,13 @@ export function AppSidebar() {
             </nav>
 
             <div className="p-4 mt-auto border-t border-slate-100">
-                {!isCollapsed && (
+                {(!isCollapsed || isMobileMenuOpen) && (
                     <div className="mb-4">
                         <div className="flex items-center gap-2 px-2 mb-2">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Enterprise</span>
                             <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-200 opacity-70 shadow-[0_0_10px_rgba(79,70,229,0.5)] animate-pulse">Free Book</span>
                         </div>
-                        <Link href="/dashboard/llm-cleaner">
+                        <Link href="/dashboard/llm-cleaner" onClick={onClose}>
                             <motion.div
                                 whileHover={{ x: 4 }}
                                 className={`flex items-center gap-3 p-3 rounded-xl transition-all ${pathname === "/dashboard/llm-cleaner"
@@ -93,7 +102,7 @@ export function AppSidebar() {
                                 <span>LLM Dataset Cleaning</span>
                             </motion.div>
                         </Link>
-                        <Link href="/dashboard/reversible-redaction">
+                        <Link href="/dashboard/reversible-redaction" onClick={onClose}>
                             <motion.div
                                 whileHover={{ x: 4 }}
                                 className={`flex items-center gap-3 p-3 rounded-xl transition-all ${pathname === "/dashboard/reversible-redaction"
@@ -108,7 +117,7 @@ export function AppSidebar() {
                     </div>
                 )}
 
-                {!isCollapsed && (
+                {(!isCollapsed || isMobileMenuOpen) && (
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                         <p className="text-xs font-medium text-slate-500 mb-2">Storage Used</p>
                         <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -118,6 +127,42 @@ export function AppSidebar() {
                     </div>
                 )}
             </div>
-        </motion.div>
+        </>
+    );
+
+    return (
+        <>
+            {/* Desktop Sidebar */}
+            <motion.div
+                animate={{ width: isCollapsed ? 80 : 280 }}
+                className="hidden md:flex h-screen bg-white border-r border-slate-200 flex-col sticky top-0 z-50"
+            >
+                <SidebarContent />
+            </motion.div>
+
+            {/* Mobile Sidebar (Drawer) */}
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 0.5 }}
+                            exit={{ opacity: 0 }}
+                            onClick={onClose}
+                            className="fixed inset-0 bg-black/50 z-50 md:hidden"
+                        />
+                        <motion.div
+                            initial={{ x: "-100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="fixed inset-y-0 left-0 w-[280px] bg-white z-50 flex flex-col md:hidden shadow-2xl"
+                        >
+                            <SidebarContent />
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </>
     );
 }

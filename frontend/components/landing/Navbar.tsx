@@ -3,11 +3,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { PremiumButton } from "@/components/ui/PremiumButton";
-import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
+import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { User } from "@supabase/supabase-js";
-import { LogOut, LayoutDashboard } from "lucide-react";
+import { LogOut, LayoutDashboard, Menu } from "lucide-react";
 
 function Logo3D() {
     const ref = useRef<HTMLDivElement>(null);
@@ -90,6 +90,7 @@ function Logo3D() {
 export function Navbar() {
     const supabase = createClient();
     const [user, setUser] = useState<User | null>(null);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     useEffect(() => {
         const getUser = async () => {
@@ -131,19 +132,19 @@ export function Navbar() {
             <div className="flex items-center gap-4">
                 {!user ? (
                     <>
-                        <Link href="/login">
+                        <Link href="/login" className="hidden md:block">
                             <button className="text-sm font-medium text-slate-600 hover:text-slate-900">
                                 Log in
                             </button>
                         </Link>
-                        <Link href="/signup">
+                        <Link href="/signup" className="hidden md:block">
                             <PremiumButton className="bg-slate-900 text-white hover:bg-slate-800 px-5 py-2 h-auto text-sm rounded-full">
                                 Get Started
                             </PremiumButton>
                         </Link>
                     </>
                 ) : (
-                    <div className="flex items-center gap-4">
+                    <div className="hidden md:flex items-center gap-4">
                         <Link href="/dashboard">
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
@@ -184,7 +185,60 @@ export function Navbar() {
                         </div>
                     </div>
                 )}
+
+                {/* Mobile Menu Button */}
+                <button
+                    className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                >
+                    {isMobileMenuOpen ? <LogOut className="w-6 h-6 rotate-45" /> : <Menu className="w-6 h-6" />}
+                </button>
             </div>
+
+            {/* Mobile Menu Overlay */}
+            <AnimatePresence>
+                {isMobileMenuOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="absolute top-full left-0 right-0 bg-white border-b border-slate-100 shadow-xl p-4 md:hidden flex flex-col gap-4 z-40"
+                    >
+                        <Link href="#features" className="text-slate-600 font-medium py-2 border-b border-slate-50" onClick={() => setIsMobileMenuOpen(false)}>Features</Link>
+                        <Link href="#use-cases" className="text-slate-600 font-medium py-2 border-b border-slate-50" onClick={() => setIsMobileMenuOpen(false)}>Use Cases</Link>
+                        <Link href="#pricing" className="text-slate-600 font-medium py-2 border-b border-slate-50" onClick={() => setIsMobileMenuOpen(false)}>Pricing</Link>
+
+                        {!user ? (
+                            <div className="flex flex-col gap-3 mt-2">
+                                <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                                    <button className="w-full py-3 text-slate-600 font-medium border border-slate-200 rounded-xl">
+                                        Log in
+                                    </button>
+                                </Link>
+                                <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                                    <button className="w-full py-3 bg-slate-900 text-white font-medium rounded-xl">
+                                        Get Started
+                                    </button>
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-3 mt-2">
+                                <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                                    <button className="w-full py-3 bg-slate-900 text-white font-medium rounded-xl">
+                                        Go to Dashboard
+                                    </button>
+                                </Link>
+                                <button
+                                    onClick={() => { handleSignOut(); setIsMobileMenuOpen(false); }}
+                                    className="w-full py-3 text-red-600 font-medium border border-red-100 bg-red-50 rounded-xl"
+                                >
+                                    Sign Out
+                                </button>
+                            </div>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.nav>
     );
 }
